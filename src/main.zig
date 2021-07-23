@@ -48,9 +48,9 @@ fn parseOptions() !Options {
                 }
             },
             .opencl => {
-                if (std.mem.eql(u8, arg, "--device")) {
+                if (std.mem.eql(u8, arg, "-d") or std.mem.eql(u8, arg, "--device")) {
                     opts.device_name = it.nextPosix() orelse {
-                        try stderr.writeAll("Error: Missing argument <name> for option --device\n");
+                        try stderr.print("Error: Missing argument <name> for option {s}\n", .{arg});
                         return error.InvalidCmdline;
                     };
                 } else if (std.mem.eql(u8, arg, "--futhark-profile")) {
@@ -87,7 +87,7 @@ fn printHelp() !void {
             ,
         .opencl =>
             \\Available GPU backend options:
-            \\--device <name>     Select the Futhark device.
+            \\-d --device <name>  Select the Futhark device.
             \\--futhark-profile   Enable Futhark profiling and report at exit.
             ,
     };
@@ -129,23 +129,23 @@ pub fn main() !void {
         .multicore => c.futhark_context_config_set_num_threads(cfg, opts.threads),
         .opencl => {
             if (opts.device_name) |name| {
-                c.futhark_context_config_set_device_name(cfg, name);
+                c.futhark_context_config_set_device(cfg, name);
             }
 
-            futhark_context_config_set_profiling(@boolToInt(opts.futhark_profile));
+            c.futhark_context_config_set_profiling(cfg, @boolToInt(opts.futhark_profile));
         },
     }
 
     const ctx = c.futhark_context_new(cfg) orelse return error.OutOfMemory;
     defer c.futhark_context_free(ctx);
 
-    const input = [_]i32{1, 2, 3, 4};
-    const src = c.futhark_new_i32_1d(ctx, &input, @intCast(i64, input.len)) orelse return error.OutOfMemory;
-    defer _ = c.futhark_free_i32_1d(ctx, src);
+    const input = [_]u64{1, 2, 3, 4};
+    const src = c.futhark_new_u64_1d(ctx, &input, @intCast(i64, input.len)) orelse return error.OutOfMemory;
+    defer _ = c.futhark_free_u64_1d(ctx, src);
 
-    var dst: ?*c.futhark_i32_1d = null;
+    var dst: ?*c.futhark_u64_1d = null;
     defer if (dst) |arr| {
-        _ = c.futhark_free_i32_1d(ctx, arr);
+        _ = c.futhark_free_u64_1d(ctx, arr);
     };
 
     var err = c.futhark_entry_main(ctx, &dst, src);
@@ -154,9 +154,9 @@ pub fn main() !void {
         return error.KernelFailed;
     }
 
-    const len = c.futhark_shape_i32_1d(ctx, dst)[0];
-    const host_dst = try std.heap.page_allocator.alloc(i32, @intCast(usize, len));
-    _ = c.futhark_values_i32_1d(ctx, dst, host_dst.ptr);
+    const len = c.futhark_shape_u64_1d(ctx, dst)[0];
+    const host_dst = try std.heap.page_allocator.alloc(u64, @intCast(usize, len));
+    _ = c.futhark_values_u64_1d(ctx, dst, host_dst.ptr);
 
     try stdout.writeAll("Results:\n");
     for (host_dst) |value| {
