@@ -148,11 +148,15 @@ pub fn main() !void {
         _ = c.futhark_free_u64_1d(ctx, arr);
     };
 
+    var timer = try std.time.Timer.start();
     var err = c.futhark_entry_main(ctx, &dst, src);
     err |= c.futhark_context_sync(ctx);
     if (err != 0) {
         return error.KernelFailed;
     }
+
+    var elapsed = timer.lap();
+    try stdout.print("Elspased runtime: {}us\n", .{ elapsed / std.time.ns_per_us });
 
     const len = c.futhark_shape_u64_1d(ctx, dst)[0];
     const host_dst = try std.heap.page_allocator.alloc(u64, @intCast(usize, len));

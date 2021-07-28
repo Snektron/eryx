@@ -48,6 +48,10 @@ def compute_primitive_root(n, N):
 def is_power_of_2(x):
     return x & (x - 1) == 0
 
+def bit_reverse(x, bits):
+    assert 0 <= x < 2 ** bits
+    return int(f'{x:0{bits}b}'[::-1], 2)
+
 def ntt(a):
     n = len(a)
     N = compute_working_modulus(BASE - 1, n)
@@ -56,8 +60,8 @@ def ntt(a):
     def xk(k):
         result = 0
         for j, x in enumerate(a):
-            result += x * (w ** (j * k))
-        return result % N
+            result = (result + x * (w ** (j * k))) % N
+        return result
 
     return [xk(k) for k in range(n)]
 
@@ -94,7 +98,6 @@ def ntt2_r(N, a):
         q = (w ** k) * x[k + n // 2]
         x[k] = (p + q) % N
         x[k + n // 2] = (p - q) % N
-
     return x
 
 def ntt2(a):
@@ -140,10 +143,99 @@ def intt2(a):
         x[k] = x[k] * invn % N
     return x
 
-f = [4, 1, 4, 2, 1, 3, 5, 6]
+def ntt3(a):
+    a = [x for x in a]
+    n = len(a)
 
-print(ntt(f))
-print(ntt2(f))
+    N = compute_working_modulus(BASE - 1, n)
+    w = compute_primitive_root(n, N)
 
-print(intt(ntt(f)))
-print(intt2(ntt2(f)))
+    def iteration(j, ns, a, b):
+        k = (j % ns) * n // (ns * 2)
+        assert (j % ns) * n % (ns * 2) == 0
+
+        # print(k, pow(w, k, N))
+
+        v0 = a[j]
+        v1 = pow(w, k, N) * a[j + n // 2]
+        v0, v1 = (v0 + v1) % N, (v0 - v1) % N
+        d = (j // ns) * ns * 2 + j % ns
+        b[d] = v0
+        b[d + ns] = v1
+
+    assert is_power_of_2(n)
+    b = [0] * n
+    ns = 1
+    while ns < n:
+        for j in range(n // 2):
+            iteration(j, ns, a, b)
+        a, b = b, a
+        ns *= 2
+    return a
+
+def intt3(a):
+    a = [x for x in a]
+    n = len(a)
+
+    N = compute_working_modulus(BASE - 1, n)
+    w = compute_primitive_root(n, N)
+    invw = pow(w, -1, N)
+    invn = pow(n, -1, N)
+
+    def iteration(j, ns, a, b):
+        k = (j % ns) * n // (ns * 2)
+        assert (j % ns) * n % (ns * 2) == 0
+
+        v0 = a[j]
+        v1 = pow(invw, k, N) * a[j + n // 2]
+        v0, v1 = (v0 + v1) % N, (v0 - v1) % N
+        d = (j // ns) * ns * 2 + j % ns
+        b[d] = v0
+        b[d + ns] = v1
+
+    assert is_power_of_2(n)
+    b = [0] * n
+    ns = 1
+    while ns < n:
+        for j in range(n // 2):
+            iteration(j, ns, a, b)
+        a, b = b, a
+        ns *= 2
+
+    for i in range(n):
+        a[i] = a[i] * invn % N
+
+    return a
+
+# f = [4, 1, 4, 2, 1, 3, 5, 6]
+
+# print(ntt([3, 2, 1, 0, 0, 0, 0, 0]))
+# print(ntt([6, 5, 4, 0, 0, 0, 0, 0]))
+# print(ntt2(f))
+# print(ntt3(f))
+
+# print(intt(ntt(f)))
+# print(intt2(ntt2(f)))
+# print(intt3(ntt3(f)))
+
+# n = 16
+# N = compute_working_modulus(BASE - 1, n)
+# w = compute_primitive_root(n, N)
+# invw = pow(w, -1, N)
+
+# print([pow(w, i, N) for i in range(n // 2)])
+# print([pow(invw, i, N) for i in range(n // 2)])
+
+MAX_N_LOG2 = 20
+
+Ns = [compute_working_modulus(BASE - 1, 2**i) for i in range(MAX_N_LOG2)]
+print("primes =", Ns)
+
+ws = [compute_primitive_root(2**i, Ns[i]) for i in range(MAX_N_LOG2)]
+print("primitive roots =", ws)
+
+iws = [pow(ws[i], -1, Ns[i]) for i in range(MAX_N_LOG2)]
+print("inverse primitive roots =", iws)
+
+ins = [pow(2**i, -1, Ns[i]) for i in range(MAX_N_LOG2)]
+print("inverse lengths =", ins)
