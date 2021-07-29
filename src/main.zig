@@ -52,7 +52,7 @@ fn parseOptions() !Options {
                     continue;
                 }
             },
-            .opencl => {
+            .opencl, .cuda => {
                 if (std.mem.eql(u8, arg, "-d") or std.mem.eql(u8, arg, "--device")) {
                     opts.device_name = it.nextPosix() orelse {
                         try stderr.print("Error: Missing argument <name> for option {s}\n", .{arg});
@@ -91,7 +91,7 @@ fn printHelp() !void {
             \\-t --threads <amt>  Set the maximum number of threads that may be used
             \\                    (default: number of cores).
             ,
-        .opencl =>
+        .opencl, .cuda =>
             \\Available GPU backend options:
             \\-d --device <name>  Select the Futhark device.
             \\--futhark-profile   Enable Futhark profiling and report at exit.
@@ -212,7 +212,7 @@ pub fn main() !void {
     switch (build_options.futhark_backend) {
         .c => {},
         .multicore => c.futhark_context_config_set_num_threads(cfg, opts.threads),
-        .opencl => {
+        .opencl, .cuda => {
             if (opts.device_name) |name| {
                 c.futhark_context_config_set_device(cfg, name);
             }

@@ -5,6 +5,7 @@ const FutharkBackend = enum {
     c,
     multicore,
     opencl,
+    cuda,
 };
 
 fn addFutharkSrc(b: *Builder, exe: *std.build.LibExeObjStep, backend: FutharkBackend) void {
@@ -41,6 +42,8 @@ pub fn build(b: *std.build.Builder) void {
     const backend = b.option(FutharkBackend, "futhark-backend", "Set futhark backend") orelse .c;
     const ocl_inc = b.option([]const u8, "opencl-include", "opencl include path") orelse "/usr/include";
     const ocl_lib = b.option([]const u8, "opencl-lib", "opencl library path") orelse "/usr/lib";
+    const cuda_inc = b.option([]const u8, "cuda-include", "opencl include path") orelse "/usr/local/cuda/include";
+    const cuda_lib = b.option([]const u8, "cuda-lib", "opencl library path") orelse "/usr/local/cuda/lib64";
 
     const exe = b.addExecutable("gpu-big-int", "src/main.zig");
     exe.setTarget(target);
@@ -51,7 +54,14 @@ pub fn build(b: *std.build.Builder) void {
         exe.addSystemIncludeDir(ocl_inc);
         exe.addLibPath(ocl_lib);
         exe.linkSystemLibraryName("OpenCL");
+    } else if (backend == .cuda) {
+        exe.addSystemIncludeDir(cuda_inc);
+        exe.addLibPath(cuda_lib);
+        exe.linkSystemLibraryName("cuda");
+        exe.linkSystemLibraryName("cudart");
+        exe.linkSystemLibraryName("nvrtc");
     }
+    
     addFutharkSrc(b, exe, backend);
 
     const run_cmd = exe.run();
