@@ -46,6 +46,15 @@ let montgomery_convert_to (n: u64) (inv: u64) (r2: u64) (x: u64): u64 =
 let montgomery_convert_from (n: u64) (inv: u64) (x: u64): u64 =
     montgomery_reduce n inv 0 x
 
+let montgomery_pow (n: u64) (inv: u64) (one: u64) (base: u64) (exponent: u64): u64 =
+    let (result, _) =
+        loop (result, x) = (one, base) for i < 64 do
+            let bit = (exponent >> (u64.i64 i)) & 1
+            let result = if bit == 1 then montgomery_multiply n inv result x else result
+            let x = montgomery_multiply n inv x x
+            in (result, x)
+    in result
+
 entry main =
     let a = 5315
     let b = 249366121

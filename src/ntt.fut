@@ -1,24 +1,20 @@
 local import "util"
+local import "montgomery"
 
---  let max_n = 8i64
-
---  let prime = 673i64
-
---  -- Index i holds the primitive root for n=2^i
---  let w: []i64 = [1, 64, 58, 347]
---  let invw: []i64 = [1, 326, 615, 609]
---  let invn = 589i64
-
-local let ntt_iteration [n] (prime: i64) (w: []i64) (a: [n]i64) (ns: i64) (j: i64) =
+local let ntt_iteration [n] (prime: u64) (inv_prime: u64) (w: []u64) (a: [n]u64) (ns: i64) (j: i64) =
     let k = (j % ns) * n / (ns * 2)
     let v0 = a[j]
-    let v1 = w[k] * a[j + n / 2]
-    let (v0, v1) = ((v0 + v1) % prime, (v0 - v1) % prime)
+    let v1 = montgomery_multiply prime inv_prime w[k] a[j + n / 2]
+    -- TODO: Can we remove the modulo here somehow?
+    let (v0, v1) = ((v0 + v1) % prime, (v0 - v1 + prime) % prime)
     let i0 = (j / ns) * ns * 2 + j % ns
     let i1 = i0 + ns
     in (i0, v0, i1, v1)
 
-let ntt [n] (prime: i64) (w: []i64) (input: [n]i64): [n]i64=
+-- | Compute the Number Theoretical Transform on the input.
+-- `w` and `input` are expected to be in montgomery space with regards to `prime`.
+-- `inv_prime` is the inverse computed by `montgomery_invert prime`
+let ntt [n] (prime: u64) (inv_prime: u64) (w: []u64) (input: [n]u64): [n]u64 =
     let bits = assert (is_power_of_2 n) (ceil_log_2 n)
     let NS = map (2**) (iota bits)
     let js = iota (n / 2)
@@ -28,16 +24,22 @@ let ntt [n] (prime: i64) (w: []i64) (input: [n]i64): [n]i64=
         loop (input, output) = (input, output) for ns in NS do
             let (i0s, v0s, i1s, v1s) =
                 js
-                |> map (ntt_iteration prime w input ns)
+                |> map (ntt_iteration prime inv_prime w input ns)
                 |> unzip4
             let output' =
                 scatter
                     output
                     (i0s ++ i1s :> [n]i64)
-                    (v0s ++ v1s :> [n]i64)
+                    (v0s ++ v1s :> [n]u64)
             in (output', input)
-    in res :> [n]i64
+    in res :> [n]u64
 
-let intt [n] (prime: i64) (invw: []i64) (invn: i64) (input: [n]i64): [n]i64 =
-    ntt prime invw input
-    |> map (\x -> x * invn % prime)
+-- | Compute the Inverse Number Theoretical Transform on the input.
+-- `inv_w` and `input` are expected to be in montgomery space with regards to `prime`.
+-- `inv_prime` is the inverse computed by `montgomery_invert prime`
+let intt [n] (prime: u64) (inv_prime: u64) (inv_n: u64) (inv_w: []u64) (input: [n]u64): [n]u64 =
+    ntt prime inv_prime inv_w input
+    |> map (montgomery_multiply prime inv_prime inv_n)
+
+--  4261675009
+--  8384598389812410000

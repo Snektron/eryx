@@ -2,7 +2,7 @@
 import sympy
 import sys
 
-BASE = 10
+BASE = 2**8
 MAX_N = 8
 
 def reverse(coeffs):
@@ -149,6 +149,11 @@ def ntt3(a):
 
     N = compute_working_modulus(BASE - 1, n)
     w = compute_primitive_root(n, N)
+    # invw = pow(w, -1, N)
+
+    # for i in range(n // 2):
+    #     print(pow(invw, i, N))
+    # return
 
     def iteration(j, ns, a, b):
         k = (j % ns) * n // (ns * 2)
@@ -204,6 +209,60 @@ def intt3(a):
         a[i] = a[i] * invn % N
 
     return a
+
+class Montgomery:
+    def __init__(self, mod):
+        self.r = 2**64
+        self.mod = mod
+        self.inv = 1
+        for i in range(6):
+            self.inv *= 2 - n * self.inv
+        self.inv %= self.r
+
+
+
+    def mulhl(self, a, b):
+        c = a * b
+        return c // self.r, c % self.r
+
+    def init(self, x):
+        assert x < self.r
+        x %= self.mod
+
+        for i in range(64):
+            x <<= 1
+            x %= self.r
+            if x >= self.mod:
+                x -= self.mod
+        return x
+
+    def reduce(self, h, l):
+        assert h < self.r and l < self.r
+        q = (l * self.inv) % self.r
+        a = h - (q * self.mod) // self.r
+        if a < 0:
+            a += self.mod
+        return a
+
+    def mult(self, a, b):
+        h, l = self.mulhl(a, b)
+        return self.reduce(h, l)
+
+f = [0] * MAX_N
+f[1] = 1
+print(ntt3(f))
+
+# print(ntt3(f))
+
+# a = 5315
+# b = 249366121
+# n = 4261675009
+
+# print((a * b) % n)
+
+# m = Montgomery(n)
+
+# print(m.reduce(0, m.mult(m.init(a), m.init(b))))
 
 # f = [4, 1, 4, 2, 1, 3, 5, 6]
 

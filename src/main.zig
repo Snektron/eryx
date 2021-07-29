@@ -284,7 +284,7 @@ pub fn main() !void {
 
     try stdout.print("Results are equal: {}\n", .{ futhark_result.eq(cpu_result) });
 
-    for (futhark_result.limbs) |x| {
+    for (futhark_result.limbs[0 .. futhark_result.len()]) |x| {
         std.debug.print("{}\n", .{ x });
     }
 
