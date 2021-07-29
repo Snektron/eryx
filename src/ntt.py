@@ -41,6 +41,7 @@ def compute_working_modulus(m, n):
 def compute_primitive_root(n, N):
     factors = sympy.ntheory.factorint(n)
     candidates = sympy.ntheory.residue_ntheory.nthroot_mod(1, n, N, True)
+    print(len(candidates))
     for a in candidates:
         if all(pow(a, n // p, N) != 1 for p in factors):
             return a
@@ -248,9 +249,9 @@ class Montgomery:
         h, l = self.mulhl(a, b)
         return self.reduce(h, l)
 
-f = [0] * MAX_N
-f[1] = 1
-print(ntt3(f))
+# f = [0] * MAX_N
+# f[1] = 1
+# print(ntt3(f))
 
 # print(ntt3(f))
 
@@ -283,18 +284,11 @@ print(ntt3(f))
 # print([pow(w, i, N) for i in range(n // 2)])
 # print([pow(invw, i, N) for i in range(n // 2)])
 
-# MAX_N_LOG2 = 20
-# BASE = 2 ** 8
+MAX_N_LOG2 = 26
+BASE = 2 ** 8
 
-# Ns = [compute_working_modulus(BASE - 1, 2**i) for i in range(MAX_N_LOG2)]
-# print("primes =", Ns)
+Ns = [compute_working_modulus(BASE - 1, 2**i) for i in range(MAX_N_LOG2)]
+print("primes =", Ns)
 
-# ws = [compute_primitive_root(2**i, Ns[i]) for i in range(MAX_N_LOG2)]
-# print("primitive roots =", ws)
-
-# iws = [pow(ws[i], -1, Ns[i]) for i in range(MAX_N_LOG2)]
-# print("inverse primitive roots =", iws)
-
-# ins = [pow(2**i, -1, Ns[i]) for i in range(MAX_N_LOG2)]
-# print("inverse lengths =", ins)
-
+ws = [compute_primitive_root(2**i, Ns[i]) for i in range(MAX_N_LOG2)]
+print("primitive roots =", ws)

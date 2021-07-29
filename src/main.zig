@@ -224,7 +224,8 @@ pub fn main() !void {
     const ctx = c.futhark_context_new(cfg) orelse return error.OutOfMemory;
     defer c.futhark_context_free(ctx);
 
-    const len = 65536;
+    const len = 1 << 20;
+    try stdout.print("Multiplying integers of {} bits\n", .{len / 2 * 64});
 
     const a = try allocator.alloc(u64, len);
     defer allocator.free(a);
@@ -234,8 +235,8 @@ pub fn main() !void {
     defer allocator.free(b);
     for (b) |*i| i.* = 0;
 
-    a[1] = 1;
-    b[1] = 1;
+    for (a[0..len / 2]) |*x, i| x.* = i;
+    for (b[0..len / 2]) |*x, i| x.* = i;
 
     var futhark_result = blk: {
         var gpu_a = try GpuInt.init(ctx, a);
@@ -276,7 +277,7 @@ pub fn main() !void {
         try cpu_result.mul(cpu_a, cpu_b);
 
         var elapsed = timer.lap();
-        try stdout.print("CPU elapsed runtime: {}us\n", .{ elapsed / std.time.ns_per_us });
+        try stdout.print("Zig elapsed runtime: {}us\n", .{ elapsed / std.time.ns_per_us });
 
         break :blk cpu_result;
     };
@@ -284,12 +285,15 @@ pub fn main() !void {
 
     try stdout.print("Results are equal: {}\n", .{ futhark_result.eq(cpu_result) });
 
-    for (futhark_result.limbs[0 .. futhark_result.len()]) |x| {
-        std.debug.print("{}\n", .{ x });
-    }
+    // std.debug.print("Futhark result:\n", .{});
+    // for (futhark_result.limbs[0 .. futhark_result.len()]) |x| {
+    //     std.debug.print("{X}\n", .{ x });
+    // }
 
-    // std.debug.print("{}\n", .{ futhark_result.limbs.len });
-    // std.debug.print("{}\n", .{ cpu_result.len() });
+    // std.debug.print("CPU result:\n", .{});
+    // for (cpu_result.limbs[0 .. cpu_result.len()]) |x| {
+    //     std.debug.print("{X}\n", .{ x });
+    // }
 
     if (opts.futhark_profile) {
         const report = c.futhark_context_report(ctx);
