@@ -30,7 +30,7 @@ fn addFutharkSrc(b: *Builder, exe: *std.build.LibExeObjStep, backend: FutharkBac
     exe.step.dependOn(&futhark_gen.step);
 
     const futhark_c_output = std.mem.concat(b.allocator, u8, &[_][]const u8{futhark_output, ".c"}) catch unreachable;
-    exe.addCSourceFile(futhark_c_output, &[_][]const u8{});
+    exe.addCSourceFile(futhark_c_output, &[_][]const u8{"-fno-sanitize=undefined"});
     exe.addIncludeDir(cache_root);
     exe.addBuildOption(FutharkBackend, "futhark_backend", backend);
 }

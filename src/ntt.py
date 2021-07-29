@@ -154,8 +154,6 @@ def ntt3(a):
         k = (j % ns) * n // (ns * 2)
         assert (j % ns) * n % (ns * 2) == 0
 
-        # print(k, pow(w, k, N))
-
         v0 = a[j]
         v1 = pow(w, k, N) * a[j + n // 2]
         v0, v1 = (v0 + v1) % N, (v0 - v1) % N
@@ -226,16 +224,18 @@ def intt3(a):
 # print([pow(w, i, N) for i in range(n // 2)])
 # print([pow(invw, i, N) for i in range(n // 2)])
 
-MAX_N_LOG2 = 20
+# MAX_N_LOG2 = 20
+# BASE = 2 ** 8
 
-Ns = [compute_working_modulus(BASE - 1, 2**i) for i in range(MAX_N_LOG2)]
-print("primes =", Ns)
+# Ns = [compute_working_modulus(BASE - 1, 2**i) for i in range(MAX_N_LOG2)]
+# print("primes =", Ns)
 
-ws = [compute_primitive_root(2**i, Ns[i]) for i in range(MAX_N_LOG2)]
-print("primitive roots =", ws)
+# ws = [compute_primitive_root(2**i, Ns[i]) for i in range(MAX_N_LOG2)]
+# print("primitive roots =", ws)
 
-iws = [pow(ws[i], -1, Ns[i]) for i in range(MAX_N_LOG2)]
-print("inverse primitive roots =", iws)
+# iws = [pow(ws[i], -1, Ns[i]) for i in range(MAX_N_LOG2)]
+# print("inverse primitive roots =", iws)
 
-ins = [pow(2**i, -1, Ns[i]) for i in range(MAX_N_LOG2)]
-print("inverse lengths =", ins)
+# ins = [pow(2**i, -1, Ns[i]) for i in range(MAX_N_LOG2)]
+# print("inverse lengths =", ins)
+

@@ -5,6 +5,10 @@ const c = @cImport({
     @cInclude("futhark.h");
 });
 
+const big_int = std.math.big.int;
+
+pub const log_level = .debug;
+
 const Options = struct {
     help: bool,
     futhark_verbose: bool,
@@ -45,6 +49,7 @@ fn parseOptions() !Options {
                     opts.threads = std.fmt.parseInt(i32, threads_arg, 0) catch {
                         return error.InvalidCmdline;
                     };
+                    continue;
                 }
             },
             .opencl => {
@@ -56,6 +61,7 @@ fn parseOptions() !Options {
                 } else if (std.mem.eql(u8, arg, "--futhark-profile")) {
                     opts.futhark_profile = true;
                 }
+                continue;
             },
         }
 
@@ -104,7 +110,86 @@ fn printHelp() !void {
     );
 }
 
+fn futharkSync(ctx: *c.futhark_context) !void {
+    if (c.futhark_context_sync(ctx) != 0) {
+        return error.Sync;
+    }
+}
+
+fn futharkReportError(ctx: *c.futhark_context) void {
+    const maybe_msg = c.futhark_context_get_error(ctx);
+    defer c.free(maybe_msg);
+
+    const msg = if (maybe_msg) |msg|
+        std.mem.spanZ(msg)
+    else
+        "(no diagnostic)";
+
+    std.log.err("Futhark error: {s}\n", .{msg});
+}
+
+const GpuInt = struct {
+    limbs: *c.futhark_u64_1d,
+
+    fn init(ctx: *c.futhark_context, limbs: []u64) !GpuInt {
+        std.debug.assert(std.math.isPowerOfTwo(limbs.len));
+
+        const gpu_limbs = c.futhark_new_u64_1d(ctx, limbs.ptr, @intCast(i64, limbs.len)) orelse return error.OutOfMemory;
+        try futharkSync(ctx);
+        return GpuInt{.limbs = gpu_limbs};
+    }
+
+    fn initRaw(ctx: *c.futhark_context, limbs: *c.futhark_u64_1d) GpuInt {
+        const self =  GpuInt{.limbs = limbs};
+        std.debug.assert(std.math.isPowerOfTwo(self.len(ctx)));
+        return self;
+    }
+
+    fn fromConst(ctx: *c.futhark_context, int: big_int.Const) !GpuInt {
+        std.debug.assert(int.positive);
+        return initSet(ctx, int.limbs);
+    }
+
+    fn deinit(self: *GpuInt, ctx: *c.futhark_context) void {
+        _ = c.futhark_free_u64_1d(ctx, self.limbs);
+        self.* = undefined;
+    }
+
+    fn download(self: GpuInt, ctx: *c.futhark_context, int: *big_int.Managed) !void {
+        const digits = self.len(ctx);
+        try int.ensureCapacity(digits);
+        int.setLen(digits);
+
+        const err = c.futhark_values_u64_1d(ctx, self.limbs, int.limbs.ptr);
+        if (err != 0) {
+            return error.IntDownload;
+        }
+        try futharkSync(ctx);
+        int.normalize(int.limbs.len);
+    }
+
+    fn mul(ctx: *c.futhark_context, a: GpuInt, b: GpuInt) !GpuInt {
+        var dst: ?*c.futhark_u64_1d = null;
+        errdefer if (dst) |ptr| {
+            _ = c.futhark_free_u64_1d(ctx, ptr);
+        };
+
+        const err = c.futhark_entry_mul(ctx, &dst, a.limbs, b.limbs);
+        if (err != 0) {
+            return error.MultiplyKernel;
+        }
+
+        try futharkSync(ctx);
+        return initRaw(ctx, dst.?);
+    }
+
+    fn len(self: GpuInt, ctx: *c.futhark_context) u64 {
+        return @intCast(u64, c.futhark_shape_u64_1d(ctx, self.limbs)[0]);
+    }
+};
+
 pub fn main() !void {
+    const allocator = std.heap.page_allocator;
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();
 
@@ -139,34 +224,72 @@ pub fn main() !void {
     const ctx = c.futhark_context_new(cfg) orelse return error.OutOfMemory;
     defer c.futhark_context_free(ctx);
 
-    const input = [_]u64{1, 2, 3, 4};
-    const src = c.futhark_new_u64_1d(ctx, &input, @intCast(i64, input.len)) orelse return error.OutOfMemory;
-    defer _ = c.futhark_free_u64_1d(ctx, src);
+    const len = 65536;
 
-    var dst: ?*c.futhark_u64_1d = null;
-    defer if (dst) |arr| {
-        _ = c.futhark_free_u64_1d(ctx, arr);
+    const a = try allocator.alloc(u64, len);
+    defer allocator.free(a);
+    for (a) |*i| i.* = 0;
+
+    const b = try allocator.alloc(u64, len);
+    defer allocator.free(b);
+    for (b) |*i| i.* = 0;
+
+    a[1] = 1;
+    b[1] = 1;
+
+    var futhark_result = blk: {
+        var gpu_a = try GpuInt.init(ctx, a);
+        defer gpu_a.deinit(ctx);
+
+        var gpu_b = try GpuInt.init(ctx, b);
+        defer gpu_b.deinit(ctx);
+
+        var timer = try std.time.Timer.start();
+
+        var gpu_result = GpuInt.mul(ctx, gpu_a, gpu_b) catch |err| switch (err) {
+            error.MultiplyKernel, error.Sync => {
+                futharkReportError(ctx);
+                return error.MultiplyKernel;
+            },
+            else => |e| return e,
+        };
+        defer gpu_result.deinit(ctx);
+
+        var elapsed = timer.lap();
+        try stdout.print("Futhark elapsed runtime: {}us\n", .{ elapsed / std.time.ns_per_us });
+
+        var int = try big_int.Managed.init(allocator);
+        errdefer int.deinit();
+
+        try gpu_result.download(ctx, &int);
+        break :blk int;
     };
+    defer futhark_result.deinit();
 
-    var timer = try std.time.Timer.start();
-    var err = c.futhark_entry_main(ctx, &dst, src);
-    err |= c.futhark_context_sync(ctx);
-    if (err != 0) {
-        return error.KernelFailed;
+    var cpu_result = blk: {
+        const cpu_a = std.math.big.int.Const{.limbs = a, .positive = true};
+        const cpu_b = std.math.big.int.Const{.limbs = b, .positive = true};
+
+        var timer = try std.time.Timer.start();
+
+        var cpu_result = try std.math.big.int.Managed.init(allocator);
+        try cpu_result.mul(cpu_a, cpu_b);
+
+        var elapsed = timer.lap();
+        try stdout.print("CPU elapsed runtime: {}us\n", .{ elapsed / std.time.ns_per_us });
+
+        break :blk cpu_result;
+    };
+    defer cpu_result.deinit();
+
+    try stdout.print("Results are equal: {}\n", .{ futhark_result.eq(cpu_result) });
+
+    for (futhark_result.limbs) |x| {
+        std.debug.print("{}\n", .{ x });
     }
 
-    var elapsed = timer.lap();
-    try stdout.print("Elspased runtime: {}us\n", .{ elapsed / std.time.ns_per_us });
-
-    const len = c.futhark_shape_u64_1d(ctx, dst)[0];
-    const host_dst = try std.heap.page_allocator.alloc(u64, @intCast(usize, len));
-    _ = c.futhark_values_u64_1d(ctx, dst, host_dst.ptr);
-
-    try stdout.writeAll("Results:\n");
-    for (host_dst) |value| {
-        try stdout.print("{} ", .{value});
-    }
-    try stdout.writeByte('\n');
+    // std.debug.print("{}\n", .{ futhark_result.limbs.len });
+    // std.debug.print("{}\n", .{ cpu_result.len() });
 
     if (opts.futhark_profile) {
         const report = c.futhark_context_report(ctx);
