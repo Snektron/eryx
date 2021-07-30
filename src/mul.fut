@@ -4,57 +4,51 @@ local import "montgomery"
 local import "sum"
 
 -- | Arrays generated for base 256
-local let base = 256u64
-
--- | All arrays are valid for powers < 20
-local let max_n_log2 = 20i64
+local let base = 65536u64
 
 -- | primes[i] returns the working modulus for n = 2**i
 local let primes: []u64 = [
-    65027, 130051, 260137, 520241, 1040449,
-    2080801, 4161793, 8323201, 16646401, 33292801,
-    66598913, 133183489, 266407937, 532709377, 1065484289,
-    2131918849, 4261675009, 8526364673, 17052205057, 34091827201,
-    68206723073, 136384086017, 272772366337, 545511178241, 1091139796993,
-    2181876940801
+    4294836241, 8589672473, 17179344901, 34358689873, 68717379713,
+    137434759361, 274869519361, 549739039361, 1099478075393, 2198956157953,
+    4397912309761, 8795824601089, 17591649189889, 35183298502657, 70366596759553,
+    140733194108929, 281466386907137, 562932773683201, 1125865550774273, 2251731097878529,
+    4503462189465601, 9006924401999873, 18013848757862401, 36027698060984321, 72055395450880001,
+    144110790264225793
 ]
 
 -- | primitive_roots[i] gives the nth primitive root for n = 2**i and N = primes[i]
 local let primitive_roots: []u64 = [
-    1, 130050, 13475, 118272, 34351, 40132,
-    217153, 17627, 41766, 652807, 71476,
-    120308, 122521, 208575, 175977, 110455,
-    5315, 32915, 214273, 14332, 270415,
-    284784, 75574, 25920, 455367, 204843
+    1, 8589672472, 131070, 39281318, 6637672725,
+    929365923, 4183439356, 10066301218, 24429555417, 2673733634,
+    10558646608, 3609153121, 1210817349, 29070318506, 14695187759,
+    3654209019, 284130316, 12527315439, 592301798, 540884737,
+    29742652857, 10350322083, 2027949422, 1633251314, 1366598484,
+    7668522963
 ]
 
 local let expand_limbs [n] (a: [n]u64): []u64 =
     a
-    |> map (\i -> [i, i >> 8, i >> 16, i >> 24, i >> 32, i >> 40, i >> 48, i >> 56])
+    |> map (\i -> [i, i >> 16, i >> 32, i >> 48])
     |> flatten
-    |> map (& 0xFF)
+    |> map (& 0xFFFF)
 
 local let contract_limbs [n] (a: [n]u64): []u64 =
     a
-    |> unflatten (n / 8) 8
+    |> unflatten (n / 4) 4
     |> map (\b -> b[0]
-        | (b[1] << 8u64)
-        | (b[2] << 16u64)
-        | (b[3] << 24u64)
-        | (b[4] << 32u64)
-        | (b[5] << 40u64)
-        | (b[6] << 48u64)
-        | (b[7] << 56u64))
+        | (b[1] << 16u64)
+        | (b[2] << 32u64)
+        | (b[3] << 48u64))
 
-local let carry_and_contract_256 [n] (as: [n]u64) =
+local let carry_and_contract_65536 [n] (as: [n]u64) =
     -- Split the limbs
-    let m = n / 8
+    let m = n / 4
     let f (i: i64) =
         let limbs =
             as
             -- Fetch the right elements
-            |> map (>> (u64.i64 i * 8))
-            |> map (& 0xFF)
+            |> map (>> (u64.i64 i * 16))
+            |> map (& 0xFFFF)
             -- Rotate so they match up with the place to put them
             |> rotate (-i)
             |> map2 (\j x -> if j < i then 0 else x) (iota n)
@@ -63,8 +57,8 @@ local let carry_and_contract_256 [n] (as: [n]u64) =
         in limbs :> [m]u64
     -- Add all the integers together to get the final result
     -- The below tabulate is really slow for some reason, so just write it out manually
-    -- let bs = tabulate 8 f
-    let bs = [f 0, f 1, f 2, f 3, f 4, f 5, f 6, f 7]
+    -- let bs = tabulate 4 f
+    let bs = [f 0, f 1, f 2, f 3]
     in foldr add bs[0] bs[1:]
 
 -- | Compute ws[] and invws[] for arrays of length n
@@ -87,7 +81,7 @@ local let precompute_roots (n: i64) (prime: u64) (inv_prime: u64) (r2: u64) (one
         |> map (montgomery_pow prime inv_prime one inv_w)
     in (ws, inv_ws)
 
-local let mul_base_256 [n] (a: [n]u64) (b: [n]u64) =
+local let mul_base_65536 [n] (a: [n]u64) (b: [n]u64) =
     let log_n = assert (is_power_of_2 n) (ceil_log_2 n)
     let prime = primes[log_n]
     let inv_n = reciprocal_mod (u64.i64 n) prime
@@ -109,10 +103,10 @@ local let mul_base_256 [n] (a: [n]u64) (b: [n]u64) =
     -- Convert the result back to normal space
     let h = map (montgomery_convert_from prime inv_prime) h
     -- Finally, fix the carries
-    in carry_and_contract_256 h
+    in carry_and_contract_65536 h
 
 let mul [n] (a: [n]u64) (b: [n]u64) =
     let a = expand_limbs a
     let b = expand_limbs b
     let m = length a
-    in mul_base_256 (a :> [m]u64) (b :> [m]u64)
+    in mul_base_65536 (a :> [m]u64) (b :> [m]u64)

@@ -285,7 +285,7 @@ class Montgomery:
 # print([pow(invw, i, N) for i in range(n // 2)])
 
 # MAX_N_LOG2 = 26
-# BASE = 2 ** 8
+# BASE = 2 ** 16
 
 # Ns = [compute_working_modulus(BASE - 1, 2**i) for i in range(MAX_N_LOG2)]
 # print("primes =", Ns)
