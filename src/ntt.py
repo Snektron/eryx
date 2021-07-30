@@ -2,7 +2,7 @@
 import sympy
 import sys
 
-BASE = 2**8
+BASE = 10
 MAX_N = 8
 
 def reverse(coeffs):
@@ -25,8 +25,8 @@ def carry(x):
     carry = 0
     for i in range(0, len(x)):
         y = x[i] + carry
-        carry = y // 10
-        x[i] = y % 10
+        carry = y // BASE
+        x[i] = y % BASE
     return x
 
 def compute_working_modulus(m, n):
@@ -284,11 +284,11 @@ class Montgomery:
 # print([pow(w, i, N) for i in range(n // 2)])
 # print([pow(invw, i, N) for i in range(n // 2)])
 
-MAX_N_LOG2 = 26
-BASE = 2 ** 8
+# MAX_N_LOG2 = 26
+# BASE = 2 ** 8
 
-Ns = [compute_working_modulus(BASE - 1, 2**i) for i in range(MAX_N_LOG2)]
-print("primes =", Ns)
+# Ns = [compute_working_modulus(BASE - 1, 2**i) for i in range(MAX_N_LOG2)]
+# print("primes =", Ns)
 
-ws = [compute_primitive_root(2**i, Ns[i]) for i in range(MAX_N_LOG2)]
-print("primitive roots =", ws)
+# ws = [compute_primitive_root(2**i, Ns[i]) for i in range(MAX_N_LOG2)]
+# print("primitive roots =", ws)
