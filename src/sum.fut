@@ -1,6 +1,6 @@
 local type carry = #carry | #maybe | #no
 
-let add [n] (a: [n]u64) (b: [n]u64) =
+let add [n] (a: [n]u64) (b: [n]u64): [n]u64 =
     let p = map2 (+) a b
     in
         map2

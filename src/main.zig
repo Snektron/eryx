@@ -239,8 +239,7 @@ pub fn main() !void {
     const ctx = c.futhark_context_new(cfg) orelse return error.OutOfMemory;
     defer c.futhark_context_free(ctx);
 
-    // const len = 1 << 20;
-    const len = 8;
+    const len = 1 << 10;
     try stdout.print("Multiplying integers of {} bits\n", .{len / 2 * 64});
 
     const a = try allocator.alloc(u64, len);
@@ -250,9 +249,6 @@ pub fn main() !void {
     const b = try allocator.alloc(u64, len);
     defer allocator.free(b);
     for (b) |*i| i.* = 0;
-
-    // a[0] = ~@as(u64, 0);
-    // b[0] = ~@as(u64, 0);
 
     for (a[0..len / 2]) |*x, i| x.* = ~i;
     for (b[0..len / 2]) |*x, i| x.* = ~i;
@@ -266,7 +262,7 @@ pub fn main() !void {
 
         var timer = try std.time.Timer.start();
 
-        var gpu_result = GpuInt.add(ctx, gpu_a, gpu_b) catch |err| switch (err) {
+        var gpu_result = GpuInt.mul(ctx, gpu_a, gpu_b) catch |err| switch (err) {
             error.Kernel, error.Sync => {
                 futharkReportError(ctx);
                 return error.Kernel;
@@ -293,8 +289,7 @@ pub fn main() !void {
         var timer = try std.time.Timer.start();
 
         var cpu_result = try std.math.big.int.Managed.init(allocator);
-        try cpu_result.add(cpu_a, cpu_b);
-        // try cpu_result.mul(cpu_a, cpu_b);
+        try cpu_result.mul(cpu_a, cpu_b);
 
         var elapsed = timer.lap();
         try stdout.print("Zig elapsed runtime: {}us\n", .{ elapsed / std.time.ns_per_us });
@@ -315,8 +310,8 @@ pub fn main() !void {
     //     std.debug.print("{X}\n", .{ x });
     // }
 
-    std.debug.print("Futhark result: {}\n", .{ futhark_result });
-    std.debug.print("bigint result: {}\n", .{ cpu_result });
+    // std.debug.print("Futhark result: {}\n", .{ futhark_result });
+    // std.debug.print("bigint result: {}\n", .{ cpu_result });
 
     if (opts.futhark_profile) {
         const report = c.futhark_context_report(ctx);
