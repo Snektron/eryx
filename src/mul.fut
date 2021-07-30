@@ -61,8 +61,10 @@ local let carry_and_contract_256 [n] (as: [n]u64) =
             -- Contract them to u64s
             |> contract_limbs
         in limbs :> [m]u64
-    let bs = tabulate 8 f
     -- Add all the integers together to get the final result
+    -- The below tabulate is really slow for some reason, so just write it out manually
+    -- let bs = tabulate 8 f
+    let bs = [f 0, f 1, f 2, f 3, f 4, f 5, f 6, f 7]
     in foldr add bs[0] bs[1:]
 
 -- | Compute ws[] and invws[] for arrays of length n

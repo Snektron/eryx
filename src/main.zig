@@ -239,7 +239,7 @@ pub fn main() !void {
     const ctx = c.futhark_context_new(cfg) orelse return error.OutOfMemory;
     defer c.futhark_context_free(ctx);
 
-    const len = 1 << 10;
+    const len = 1 << 20;
     try stdout.print("Multiplying integers of {} bits\n", .{len / 2 * 64});
 
     const a = try allocator.alloc(u64, len);
