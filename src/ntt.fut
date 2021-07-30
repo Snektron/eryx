@@ -5,8 +5,8 @@ local let ntt_iteration [n] (prime: u64) (inv_prime: u64) (w: []u64) (a: [n]u64)
     let k = (j % ns) * n / (ns * 2)
     let v0 = a[j]
     let v1 = montgomery_multiply prime inv_prime w[k] a[j + n / 2]
-    -- TODO: Can we remove the modulo here somehow?
-    let (v0, v1) = ((v0 + v1) % prime, (v0 - v1 + prime) % prime)
+    let (v0, v1) = (if v0 + v1 >= prime then v0 + v1 - prime else v0 + v1,
+        if v0 - v1 > prime then v0 - v1 + prime else v0 - v1)
     let i0 = (j / ns) * ns * 2 + j % ns
     let i1 = i0 + ns
     in (i0, v0, i1, v1)
