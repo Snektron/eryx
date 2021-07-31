@@ -168,13 +168,13 @@ const GpuInt = struct {
         int.normalize(int.limbs.len);
     }
 
-    fn add(ctx: *c.futhark_context, a: GpuInt, b: GpuInt) !GpuInt {
+    fn invokeBinaryKernel(comptime kernel: anytype, ctx: *c.futhark_context, a: GpuInt, b: GpuInt) !GpuInt {
         var dst: ?*c.futhark_u64_1d = null;
         errdefer if (dst) |ptr| {
             _ = c.futhark_free_u64_1d(ctx, ptr);
         };
 
-        const err = c.futhark_entry_add(ctx, &dst, a.limbs, b.limbs);
+        const err = kernel(ctx, &dst, a.limbs, b.limbs);
         if (err != 0) {
             return error.Kernel;
         }
@@ -183,19 +183,16 @@ const GpuInt = struct {
         return initRaw(ctx, dst.?);
     }
 
+    fn add(ctx: *c.futhark_context, a: GpuInt, b: GpuInt) !GpuInt {
+        return try invokeBinaryKernel(c.futhark_entry_add, ctx, a, b);
+    }
+
+    fn sub(ctx: *c.futhark_context, a: GpuInt, b: GpuInt) !GpuInt {
+        return try invokeBinaryKernel(c.futhark_entry_sub, ctx, a, b);
+    }
+
     fn mul(ctx: *c.futhark_context, a: GpuInt, b: GpuInt) !GpuInt {
-        var dst: ?*c.futhark_u64_1d = null;
-        errdefer if (dst) |ptr| {
-            _ = c.futhark_free_u64_1d(ctx, ptr);
-        };
-
-        const err = c.futhark_entry_mul(ctx, &dst, a.limbs, b.limbs);
-        if (err != 0) {
-            return error.Kernel;
-        }
-
-        try futharkSync(ctx);
-        return initRaw(ctx, dst.?);
+        return try invokeBinaryKernel(c.futhark_entry_mul, ctx, a, b);
     }
 
     fn len(self: GpuInt, ctx: *c.futhark_context) u64 {
