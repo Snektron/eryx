@@ -40,6 +40,7 @@ local let contract_limbs [n] (a: [n]u64): []u64 =
         | (b[2] << 32u64)
         | (b[3] << 48u64))
 
+-- | Resolve carries and convert the result into base 2^64 simultaneously.
 local let carry_and_contract_65536 [n] (as: [n]u64) =
     -- Split the limbs
     let m = n / 4
@@ -58,8 +59,29 @@ local let carry_and_contract_65536 [n] (as: [n]u64) =
     -- Add all the integers together to get the final result
     -- The below tabulate is really slow for some reason, so just write it out manually
     -- let bs = tabulate 4 f
-    let bs = [f 0, f 1, f 2, f 3]
-    in foldr add bs[0] bs[1:]
+    let xs = [f 0, f 1, f 2, f 3]
+    -- To compute the result, the vectors in `xs` need to be added together.
+    -- This can be achieved by folding over `add`, which will result in 3 calls to `add`.
+    -- Alternatively, add the vectors element-wise, keeping track of the overflow. Then, shift the overflow, and
+    -- add that to the elements using `add`.
+    let add_with_overflow a b c d =
+        let x0 = a + b
+        let c0 = x0 < a
+        let x1 = c + d
+        let c1 = x1 < c
+        let x2 = x0 + x1
+        let c2 = x2 < x0
+        in (u64.bool c0 + u64.bool c1 + u64.bool c2, x2)
+    let (carries, xs) =
+        xs
+        |> transpose
+        |> map (\x -> add_with_overflow x[0] x[1] x[2] x[3])
+        |> unzip2
+    let carries =
+        carries
+        |> rotate (-1)
+        |> map2 (\i x -> if i == 0 then 0 else x) (indices carries)
+    in add xs carries
 
 -- | Compute ws[] and invws[] for arrays of length n
 -- The outputs are in montgomery space wrt `prime`.
@@ -91,6 +113,7 @@ local let mul_base_65536 [n] (a: [n]u64) (b: [n]u64) =
     let one = montgomery_convert_to prime inv_prime r2 1
     let inv_n = montgomery_convert_to prime inv_prime r2 inv_n
     -- Pre-compute ntt powers
+    -- TODO: Pre-compute these values once instead of every time
     let (ws, inv_ws) = precompute_roots n prime inv_prime r2 one
     -- Convert inputs into montgomery space
     let a = map (montgomery_convert_to prime inv_prime r2) a
@@ -101,12 +124,17 @@ local let mul_base_65536 [n] (a: [n]u64) (b: [n]u64) =
     let h' = map2 (montgomery_multiply prime inv_prime) a' b'
     let h = intt prime inv_prime inv_n inv_ws h'
     -- Convert the result back to normal space
-    let h = map (montgomery_convert_from prime inv_prime) h
-    -- Finally, fix the carries
-    in carry_and_contract_65536 h
+    in map (montgomery_convert_from prime inv_prime) h
 
+-- | Multiply the integers represented by `a` and `b` together. Note that the
+-- resulting array needs to be large enough to hold the result in order for it to be correct, which means
+-- that the top `n/2` elements of `a` and `b` need to be zeroed.
 let mul [n] (a: [n]u64) (b: [n]u64) =
+    -- Convert the integers from base 2^64 to base 2^16, to account for possible overflow
     let a = expand_limbs a
     let b = expand_limbs b
     let m = length a
+    -- Perform the actual NTT based multiplication
     in mul_base_65536 (a :> [m]u64) (b :> [m]u64)
+    -- The carries need to be resolved in the resulting array, and it needs to be converted back into base 2^64.
+    |> carry_and_contract_65536

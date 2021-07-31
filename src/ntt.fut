@@ -40,6 +40,3 @@ let ntt [n] (prime: u64) (inv_prime: u64) (w: []u64) (input: [n]u64): [n]u64 =
 let intt [n] (prime: u64) (inv_prime: u64) (inv_n: u64) (inv_w: []u64) (input: [n]u64): [n]u64 =
     ntt prime inv_prime inv_w input
     |> map (montgomery_multiply prime inv_prime inv_n)
-
---  4261675009
---  8384598389812410000
