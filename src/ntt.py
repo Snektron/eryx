@@ -212,15 +212,14 @@ def intt3(a):
     return a
 
 class Montgomery:
-    def __init__(self, mod):
-        self.r = 2**64
+    def __init__(self, bits, mod):
+        self.bits = bits
+        self.r = 2**bits
         self.mod = mod
         self.inv = 1
-        for i in range(6):
+        for i in range(bits.bit_length() - 1):
             self.inv *= 2 - n * self.inv
         self.inv %= self.r
-
-
 
     def mulhl(self, a, b):
         c = a * b
@@ -230,7 +229,7 @@ class Montgomery:
         assert x < self.r
         x %= self.mod
 
-        for i in range(64):
+        for i in range(self.bits):
             x <<= 1
             x %= self.r
             if x >= self.mod:
@@ -255,15 +254,20 @@ class Montgomery:
 
 # print(ntt3(f))
 
-# a = 5315
-# b = 249366121
-# n = 4261675009
+a = 5315
+b = 249366121
+n = 4261675009
+# n = 412670427844921037470771
 
 # print((a * b) % n)
 
-# m = Montgomery(n)
+m = Montgomery(64, n)
+# print(m.inv)
 
-# print(m.reduce(0, m.mult(m.init(a), m.init(b))))
+# print(n % (2**64))
+# print(n // (2**64))
+
+print(m.reduce(0, m.mult(m.init(a), m.init(b))))
 
 # f = [4, 1, 4, 2, 1, 3, 5, 6]
 

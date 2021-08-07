@@ -1,7 +1,8 @@
 local import "ntt"
 local import "util"
 local import "montgomery"
-local import "sum"
+local import "big_sum"
+local import "big_util"
 
 -- | Arrays generated for base 256
 local let base = 65536u64
@@ -81,7 +82,7 @@ local let carry_and_contract_65536 [n] (as: [n]u64) =
         carries
         |> rotate (-1)
         |> map2 (\i x -> if i == 0 then 0 else x) (indices carries)
-    in add xs carries
+    in big_add xs carries
 
 -- | Compute ws[] and invws[] for arrays of length n
 -- The outputs are in montgomery space wrt `prime`.
@@ -129,12 +130,28 @@ local let mul_base_65536 [n] (a: [n]u64) (b: [n]u64) =
 -- | Multiply the integers represented by `a` and `b` together. Note that the
 -- resulting array needs to be large enough to hold the result in order for it to be correct, which means
 -- that the top `n/2` elements of `a` and `b` need to be zeroed.
-let mul [n] (a: [n]u64) (b: [n]u64) =
+let big_mul [n] (a: [n]u64) (b: [n]u64): [n]u64 =
     -- Convert the integers from base 2^64 to base 2^16, to account for possible overflow
     let a = expand_limbs a
     let b = expand_limbs b
     let m = length a
     -- Perform the actual NTT based multiplication
-    in mul_base_65536 (a :> [m]u64) (b :> [m]u64)
+    let result = mul_base_65536 (a :> [m]u64) (b :> [m]u64) |>  carry_and_contract_65536
     -- The carries need to be resolved in the resulting array, and it needs to be converted back into base 2^64.
-    |> carry_and_contract_65536
+    in result :> [n]u64
+
+-- | Multiply the integers represented by `a` and `b` together. Note that the
+-- resulting array needs to be large enough to hold the result in order for it to be correct, which means
+-- that the top `n/2` elements of `a` and `b` need to be zeroed.
+-- The result is modulo 2^(n/2)
+let big_mul_l [n] (a: [n]u64) (b: [n]u64) =
+    big_mul a b |> big_zero_h
+
+-- | Multiply the integers represented by `a` and `b` together. Note that the
+-- resulting array needs to be large enough to hold the result in order for it to be correct, which means
+-- that the top `n/2` elements of `a` and `b` need to be zeroed.
+-- The result shifted n/2 elements to the right
+let big_mul_h [n] (a: [n]u64) (b: [n]u64) =
+    big_mul a b
+    |> big_swap_hl
+    |> big_zero_h
